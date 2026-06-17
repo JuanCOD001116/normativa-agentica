@@ -13,7 +13,6 @@ flowchart TD
 		AG_DOC[Agente de documentos<br/>RAG sobre reglamento]
 		AG_SCRAPE[Agente de scraping<br/>Consulta HTML en vivo]
 		VS[(Vector store<br/>Embeddings reglamento)]
-		WEB[(normativa.udea.edu.co<br/>Consultar / ExtensionDocumento / Documento)]
 		VAL{Validador<br/>Fundamentacion + cita + relevancia}
 		RESP[Respuesta final<br/>o aviso de baja confianza]
 
@@ -21,9 +20,8 @@ flowchart TD
 		ORQ -->|ruta documentos| AG_DOC
 		ORQ -->|ruta normativa web| AG_SCRAPE
 		AG_DOC --> VS
-		AG_SCRAPE --> WEB
+		AG_SCRAPE --> VAL
 		VS --> VAL
-		WEB --> VAL
 		VAL -->|rechaza, feedback| ORQ
 		VAL -->|aprueba| RESP
 		RESP --> UI
