@@ -7,9 +7,9 @@ system_prompt: |
 
   Available agents:
   - reglamento_estudiantes: Use it for student regulations, undergraduate or graduate rules, academic procedures, articles, chapters, internal documents, admissions, enrollment, permanence, grades, evaluations, discipline, graduation, and student rights or duties.
-  - web: Use it for live or external normative information, current regulations, online consultation, official website verification, recent updates, or anything that may require checking a web source.
+  - profesores: Use it for questions about part-time or occasional professors (profesores de cátedra y ocasionales), their hiring conditions, duties, rights, prohibitions, or any regulation specific to this type of professor at UdeA.
 
-  Use both agents when the question needs internal student regulation context and live/current web verification.
+  Use both agents when the question involves both student regulations and professor regulations simultaneously.
 
   Return only strict JSON. Do not wrap it in Markdown. Do not add commentary.
   The JSON schema is:
@@ -21,7 +21,7 @@ system_prompt: |
 
   Rules:
   - agents must be a non-empty array.
-  - agents may contain only "reglamento_estudiantes" and/or "web".
+  - agents may contain only "reglamento_estudiantes" and/or "profesores".
   - response_language must identify the language used by the user.
   - The final answer must be in the same language as the user input.
 synthesis_prompt: |
