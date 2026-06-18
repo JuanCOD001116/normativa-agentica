@@ -6,7 +6,6 @@ from app.core.models import Conversation, Message
 
 
 class ConversationService:
-
     @staticmethod
     def create_conversation(
         db: Session,
@@ -38,7 +37,9 @@ class ConversationService:
         )
 
     @staticmethod
-    def get_conversation(db: Session, conversation_id: uuid.UUID) -> Optional[Conversation]:
+    def get_conversation(
+        db: Session, conversation_id: uuid.UUID
+    ) -> Optional[Conversation]:
         """
         Obtiene el detalle de una conversación específica.
         """
@@ -62,7 +63,10 @@ class ConversationService:
             return None
 
         db_message = Message(
-            conversation_id=conversation_id, role=role, content=content, meta_data=meta_data
+            conversation_id=conversation_id,
+            role=role,
+            content=content,
+            meta_data=meta_data,
         )
         db.add(db_message)
 

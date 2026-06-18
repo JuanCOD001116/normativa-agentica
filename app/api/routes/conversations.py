@@ -18,8 +18,12 @@ from app.core.agent import AgentService
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
 
-@router.post("/", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
-def create_conversation(conversation: ConversationCreate, db: Session = Depends(get_db)):
+@router.post(
+    "/", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED
+)
+def create_conversation(
+    conversation: ConversationCreate, db: Session = Depends(get_db)
+):
     """
     Crea una nueva sesión de conversación para un usuario identificado por `user_id`.
     """
@@ -47,7 +51,9 @@ def get_conversation(conversation_id: uuid.UUID, db: Session = Depends(get_db)):
     """
     Obtiene los detalles de una conversación específica, incluyendo su historial de mensajes.
     """
-    db_conversation = ConversationService.get_conversation(db=db, conversation_id=conversation_id)
+    db_conversation = ConversationService.get_conversation(
+        db=db, conversation_id=conversation_id
+    )
     if not db_conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -56,7 +62,11 @@ def get_conversation(conversation_id: uuid.UUID, db: Session = Depends(get_db)):
     return db_conversation
 
 
-@router.post("/{conversation_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{conversation_id}/messages",
+    response_model=MessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_message(
     conversation_id: uuid.UUID,
     message: MessageCreate,
@@ -85,7 +95,9 @@ def delete_conversation(conversation_id: uuid.UUID, db: Session = Depends(get_db
     """
     Elimina una conversación y sus mensajes en cascada.
     """
-    success = ConversationService.delete_conversation(db=db, conversation_id=conversation_id)
+    success = ConversationService.delete_conversation(
+        db=db, conversation_id=conversation_id
+    )
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -117,7 +129,11 @@ def update_conversation(
     return db_conversation
 
 
-@router.post("/{conversation_id}/ask", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{conversation_id}/ask",
+    response_model=MessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def ask_agent(conversation_id: uuid.UUID, db: Session = Depends(get_db)):
     """
     Invoca al orquestador para responder la ultima consulta del usuario,
@@ -154,5 +170,5 @@ def ask_agent(conversation_id: uuid.UUID, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al procesar la respuesta del agente: {str(e)}"
+            detail=f"Error al procesar la respuesta del agente: {str(e)}",
         )

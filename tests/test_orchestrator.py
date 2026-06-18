@@ -111,6 +111,7 @@ def test_orchestrate_calls_rag_for_reglamento_estudiantes(monkeypatch):
         ]
     )
     monkeypatch.setattr(orchestrator, "get_llm", lambda: fake_llm)
+    monkeypatch.setattr(orchestrator, "_handle_smalltalk", lambda query: None)
     monkeypatch.setattr(
         orchestrator,
         "rag_ask",
@@ -136,7 +137,24 @@ def test_orchestrate_runs_both_agents_and_synthesizes(monkeypatch):
             "Respuesta final sintetizada",
         ]
     )
+    import app.agents.validator_agent as validator_agent
+
+    monkeypatch.setattr(
+        validator_agent, "validate", lambda q, r: {"valid": True, "reason": "Mocked"}
+    )
+    import app.agents.rag_agent_professors as rag_agent_professors
+
+    monkeypatch.setattr(
+        rag_agent_professors,
+        "ask",
+        lambda query: {
+            "respuesta": "Respuesta Profesores",
+            "fuentes": [],
+            "query_reescrita": query,
+        },
+    )
     monkeypatch.setattr(orchestrator, "get_llm", lambda: fake_llm)
+    monkeypatch.setattr(orchestrator, "_handle_smalltalk", lambda query: None)
     monkeypatch.setattr(
         orchestrator,
         "rag_ask",
@@ -158,6 +176,5 @@ def test_orchestrate_runs_both_agents_and_synthesizes(monkeypatch):
     assert orchestrator.AGENT_WEB in result["agent_details"]
     assert len(fake_llm.calls) == 2
     assert (
-        "same language as the original user question"
-        in fake_llm.calls[1][0]["content"]
+        "same language as the original user question" in fake_llm.calls[1][0]["content"]
     )

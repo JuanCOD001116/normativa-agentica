@@ -48,7 +48,11 @@ def test_create_and_list_conversations():
     # 1. Crear conversación
     response = client.post(
         "/api/conversations/",
-        json={"user_id": "test_user_123", "title": "Test Chat", "meta_data": {"origin": "web"}},
+        json={
+            "user_id": "test_user_123",
+            "title": "Test Chat",
+            "meta_data": {"origin": "web"},
+        },
     )
     assert response.status_code == 201
     data = response.json()

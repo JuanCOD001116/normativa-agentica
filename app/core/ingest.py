@@ -6,7 +6,11 @@ from langchain_community.document_loaders import PyPDFLoader
 
 from app.core.chunking import split_regulatory_document
 from app.core.embeddings import get_embeddings
-from app.core.vector_store import _get_client, delete_by_documento
+from app.core.vector_store import (
+    _get_client,
+    delete_by_documento,
+    clear_semantic_cache,
+)
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -43,6 +47,9 @@ def ingest_document(pdf_path: str | Path, documento: str) -> int:
 
     print("Eliminando chunks anteriores del mismo documento...")
     delete_by_documento(documento)
+
+    print("Limpiando caché semántica para mantener consistencia...")
+    clear_semantic_cache()
 
     print("Insertando en Supabase...")
     client = _get_client()

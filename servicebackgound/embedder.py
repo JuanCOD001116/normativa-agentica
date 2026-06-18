@@ -41,7 +41,9 @@ def embed_and_store(pdf_bytes: bytes, metadata: dict) -> None:
     chunks = chunk_pdf(pdf_bytes, chunk_size=chunk_size)
 
     if not chunks:
-        logger.warning("No text extracted for codigo %s. Skipping.", metadata.get("codigo"))
+        logger.warning(
+            "No text extracted for codigo %s. Skipping.", metadata.get("codigo")
+        )
         return
 
     logger.info("Codigo %s: %d chunks generated.", metadata.get("codigo"), len(chunks))

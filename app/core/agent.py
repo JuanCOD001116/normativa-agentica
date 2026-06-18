@@ -23,7 +23,9 @@ class AgentService:
         )
 
         if not last_user_message:
-            raise ValueError("La conversacion no tiene mensajes de usuario para responder")
+            raise ValueError(
+                "La conversacion no tiene mensajes de usuario para responder"
+            )
 
         from app.agents.orchestrator import orchestrate
 
