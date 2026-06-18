@@ -7,7 +7,7 @@ from supabase import create_client
 
 from app.core.embeddings import get_embeddings
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
@@ -29,15 +29,15 @@ def _extract_article_numbers(query: str) -> list[str]:
     return ARTICLE_NUMBER_PATTERN.findall(query)
 
 
-def _fetch_articles_by_number(article_numbers: list[str], documento: str | None = None) -> list[dict]:
+def _fetch_articles_by_number(
+    article_numbers: list[str], documento: str | None = None
+) -> list[dict]:
     """Busca chunks directamente por número de artículo en metadata."""
     client = _get_client()
     results = []
 
     for art_num in article_numbers:
-        query = client.table("documents").select("*").eq(
-            "metadata->>articulo", art_num
-        )
+        query = client.table("documents").select("*").eq("metadata->>articulo", art_num)
         if documento:
             query = query.eq("metadata->>documento", documento)
         response = query.execute()
@@ -66,7 +66,7 @@ def search(
             client = _get_client()
 
             semantic_results = []
-            for doc_type in (["pregrado", "posgrado"] if not documento else [documento]):
+            for doc_type in ["pregrado", "posgrado"] if not documento else [documento]:
                 response = client.rpc(
                     "match_documents",
                     {
@@ -78,7 +78,8 @@ def search(
                 semantic_results.extend(response.data)
 
             all_results = exact_results + [
-                r for r in semantic_results
+                r
+                for r in semantic_results
                 if r["id"] not in {e["id"] for e in exact_results}
             ]
             return all_results[:k]
@@ -113,6 +114,55 @@ def search(
 def delete_by_documento(documento: str) -> None:
     """Elimina todos los chunks de un documento específico."""
     client = _get_client()
-    client.table("documents").delete().eq(
-        "metadata->>documento", documento
-    ).execute()
+    client.table("documents").delete().eq("metadata->>documento", documento).execute()
+
+
+def check_semantic_cache(
+    query_embedding: list[float], threshold: float = 0.92
+) -> dict | None:
+    """Busca una pregunta semánticamente similar en la caché de Supabase.
+
+    Retorna la respuesta cacheada o None si no supera el umbral.
+    """
+    client = _get_client()
+    try:
+        response = client.rpc(
+            "match_cache",
+            {
+                "query_embedding": query_embedding,
+                "match_threshold": threshold,
+                "match_count": 1,
+            },
+        ).execute()
+        if response.data:
+            return response.data[0]
+    except Exception as e:
+        # Silenciosamente fallar y retornar None para no interrumpir el flujo principal
+        print(f"Error al consultar la caché semántica: {e}")
+    return None
+
+
+def add_to_semantic_cache(
+    query: str, query_embedding: list[float], response_data: dict
+) -> None:
+    """Guarda una consulta y su respuesta en la caché semántica."""
+    client = _get_client()
+    try:
+        client.table("semantic_cache").insert(
+            {
+                "query": query,
+                "embedding": query_embedding,
+                "response": response_data,
+            }
+        ).execute()
+    except Exception as e:
+        print(f"Error al guardar en la caché semántica: {e}")
+
+
+def clear_semantic_cache() -> None:
+    """Elimina todos los registros de la caché semántica de manera segura."""
+    client = _get_client()
+    try:
+        client.table("semantic_cache").delete().neq("query", "").execute()
+    except Exception as e:
+        print(f"Error al limpiar la caché semántica: {e}")

@@ -8,25 +8,41 @@ El sistema separa responsabilidades por tipo de consulta y valida la calidad de 
 
 ```mermaid
 flowchart TD
-		UI[Interfaz de usuario<br/>Streamlit / Gradio / Chainlit]
-		ORQ[Orquestador<br/>LangGraph - grafo de estados]
-		AG_DOC[Agente de documentos<br/>RAG sobre reglamento]
-		AG_SCRAPE[Agente de scraping<br/>Consulta HTML en vivo]
-		VS[(Vector store<br/>Embeddings reglamento)]
-		VAL{Validador<br/>Fundamentacion + cita + relevancia}
-		RESP[Respuesta final<br/>o aviso de baja confianza]
+    UI[Frontend: React SPA]
+    ORQ[Orquestador<br/>LangGraph - grafo de estados]
+    
+    subgraph Sub-agentes RAG
+        AG_REGL[Agente de Reglamento<br/>RAG sobre reglamento general]
+        AG_PROF[Agente de Profesores<br/>RAG sobre estatuto docente]
+    end
 
-		UI --> ORQ
-		ORQ -->|ruta documentos| AG_DOC
-		ORQ -->|ruta normativa web| AG_SCRAPE
-		AG_DOC --> VS
-		AG_SCRAPE --> VAL
-		VS --> VAL
-		VAL -->|rechaza, feedback| ORQ
-		VAL -->|aprueba| RESP
-		RESP --> UI
+    VS_REGL[(Vector Store<br/>Embeddings Reglamento)]
+    VS_PROF[(Vector Store<br/>Embeddings Estatuto)]
+    
+    WEB_UDEA[Portal Normativo UdeA<br/>normativa.udea.edu.co]
+    BG_SVC[Servicio Background<br/>Ingesta asíncrona]
+    
+    VAL{Validador<br/>Fundamentación + cita + relevancia}
+    RESP[Respuesta final<br/>o aviso de baja confianza]
 
-		linkStyle 6 stroke-dasharray: 4 3
+    UI <==>|API / WebSockets| ORQ
+    ORQ -->|ruta reglamento| AG_REGL
+    ORQ -->|ruta estatuto profes| AG_PROF
+    
+    AG_REGL --> VS_REGL
+    AG_PROF --> VS_PROF
+    
+    WEB_UDEA -->|Peticiones HTTP / Extracción| BG_SVC
+    BG_SVC -->|Alimentación continua| VS_PROF
+    
+    VS_REGL --> VAL
+    VS_PROF --> VAL
+    
+    VAL -->|rechaza, feedback| ORQ
+    VAL -->|aprueba| RESP
+    RESP --> UI
+
+    linkStyle 9 stroke-dasharray: 4 3
 ```
 
 ## Patrones arquitectonicos

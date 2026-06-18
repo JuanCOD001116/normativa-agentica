@@ -75,7 +75,11 @@ def _handle_smalltalk(query: str) -> dict[str, Any] | None:
     ]
     try:
         greeting_result = llm.invoke(greeting_messages)
-        response = getattr(greeting_result, "content", "¡Hola! ¿En qué te puedo ayudar con la normativa universitaria?").strip()
+        response = getattr(
+            greeting_result,
+            "content",
+            "¡Hola! ¿En qué te puedo ayudar con la normativa universitaria?",
+        ).strip()
     except Exception:
         response = "¡Hola! ¿En qué te puedo ayudar con la normativa universitaria?"
 
@@ -86,7 +90,10 @@ def _handle_smalltalk(query: str) -> dict[str, Any] | None:
         "response_language": "same language as the user input",
         "response": response,
         "agent_details": {},
-        "validation": {"valid": True, "reason": "Smalltalk — no normativa validation needed"},
+        "validation": {
+            "valid": True,
+            "reason": "Smalltalk — no normativa validation needed",
+        },
         "attempts": 1,
     }
 
@@ -124,6 +131,11 @@ def _parse_route_response(content: str) -> dict[str, Any]:
 
     normalized_agents: list[str] = []
     for agent in agents:
+        if agent in ("web", "scraping"):
+            agent = AGENT_PROFESORES
+        elif agent == "documents":
+            agent = AGENT_REGLAMENTO_ESTUDIANTES
+
         if agent not in VALID_AGENTS:
             raise ValueError(f"Unknown agent: {agent}")
         if agent not in normalized_agents:

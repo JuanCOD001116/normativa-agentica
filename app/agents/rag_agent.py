@@ -2,8 +2,13 @@ from pathlib import Path
 
 import yaml
 
+from app.core.embeddings import get_embeddings
 from app.core.llm import get_llm
-from app.core.vector_store import search
+from app.core.vector_store import (
+    search,
+    check_semantic_cache,
+    add_to_semantic_cache,
+)
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 
@@ -25,17 +30,38 @@ def rewrite_query(pregunta: str) -> str:
     ]
 
     response = llm.invoke(messages)
-    return response.content.strip()
+    return str(response.content).strip()
 
 
-def ask(pregunta: str, k: int = 5, use_rewrite: bool = True) -> dict:
+def ask(
+    pregunta: str, k: int = 5, use_rewrite: bool = True, cache_threshold: float = 0.92
+) -> dict:
     """Consulta el RAG y retorna respuesta con fuentes.
 
     Args:
         pregunta: Pregunta del usuario.
         k: Número de chunks a recuperar.
         use_rewrite: Si True, reescribe la query para mejorar retrieval.
+        cache_threshold: Umbral de similitud semántica para usar la caché.
     """
+    # Intentar obtener respuesta de la caché semántica
+    query_embedding = None
+    try:
+        query_embedding = get_embeddings().embed_query(pregunta)
+        cached_result = check_semantic_cache(query_embedding, threshold=cache_threshold)
+        if cached_result:
+            # cached_result["response"] contiene el dict con la respuesta y fuentes
+            response_data = cached_result["response"]
+            # Marcamos que proviene de la caché
+            response_data["cached"] = True
+            response_data["similitud_cache"] = round(
+                cached_result.get("similarity", 0.0), 3
+            )
+            return response_data
+    except Exception as e:
+        # En caso de error de red o base de datos en la caché, continuar con el flujo normal
+        print(f"Error al verificar la caché semántica: {e}")
+
     # Paso 1: Query rewriting
     search_query = rewrite_query(pregunta) if use_rewrite else pregunta
 
@@ -68,8 +94,22 @@ def ask(pregunta: str, k: int = 5, use_rewrite: bool = True) -> dict:
 
     response = llm.invoke(messages)
 
-    return {
+    resultado = {
         "respuesta": response.content,
         "fuentes": fuentes,
         "query_reescrita": search_query,
+        "cached": False,
     }
+
+    # Guardar en la caché semántica si pudimos generar el embedding de la pregunta original
+    if query_embedding is None:
+        try:
+            query_embedding = get_embeddings().embed_query(pregunta)
+        except Exception as e:
+            print(f"Error al calcular embedding para guardar en caché: {e}")
+            query_embedding = None
+
+    if query_embedding is not None:
+        add_to_semantic_cache(pregunta, query_embedding, resultado)
+
+    return resultado
