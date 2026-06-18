@@ -59,7 +59,7 @@ def _split_long_section(section: str, max_size: int, overlap: int) -> list[str]:
         return _split_by_paragraphs(section, max_size, overlap)
 
     # Obtener el header del artículo (todo hasta el primer párrafo)
-    end_of_header = section.find('\n\n', article_match.end())
+    end_of_header = section.find("\n\n", article_match.end())
     if end_of_header == -1:
         end_of_header = len(section)
 
@@ -70,18 +70,18 @@ def _split_long_section(section: str, max_size: int, overlap: int) -> list[str]:
         return [section]
 
     # Dividir el cuerpo por párrafos
-    paragraphs = [p.strip() for p in body.split('\n\n') if p.strip()]
+    paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
 
     chunks = []
     current_chunk = header
 
     for para in paragraphs:
         if len(current_chunk) + len(para) + 2 <= max_size:
-            current_chunk += '\n\n' + para
+            current_chunk += "\n\n" + para
         else:
             chunks.append(current_chunk)
             # Iniciar nuevo chunk con header para contexto
-            current_chunk = header + '\n\n[continúa...]\n\n' + para
+            current_chunk = header + "\n\n[continúa...]\n\n" + para
 
     if current_chunk:
         chunks.append(current_chunk)
@@ -91,13 +91,13 @@ def _split_long_section(section: str, max_size: int, overlap: int) -> list[str]:
 
 def _split_by_paragraphs(text: str, max_size: int, overlap: int) -> list[str]:
     """Divide texto por párrafos cuando no hay estructura de artículo."""
-    paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     chunks = []
     current = ""
 
     for para in paragraphs:
         if len(current) + len(para) + 2 <= max_size:
-            current += '\n\n' + para if current else para
+            current += "\n\n" + para if current else para
         else:
             if current:
                 chunks.append(current)

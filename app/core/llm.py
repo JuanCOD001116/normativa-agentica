@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=True)
 
 _llm: ChatOllama | None = None
 

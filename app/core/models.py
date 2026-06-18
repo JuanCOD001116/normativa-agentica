@@ -13,7 +13,9 @@ class Conversation(Base):
     title = Column(String(255), nullable=True, default="Nueva conversación")
     user_id = Column(String(255), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
     meta_data = Column("metadata", JSON, nullable=True)
 
     messages = relationship(

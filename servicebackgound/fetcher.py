@@ -26,11 +26,11 @@ _HEADERS = {
 
 @dataclass
 class DocumentMeta:
-    codigo: str                   # ID interno para descargar el archivo
-    numero: str                   # numero visible en la tabla
-    fecha: str                    # fecha de expedicion
-    vigencia: str                 # entrada en vigencia
-    resuelve: str                 # descripcion del documento
+    codigo: str  # ID interno para descargar el archivo
+    numero: str  # numero visible en la tabla
+    fecha: str  # fecha de expedicion
+    vigencia: str  # entrada en vigencia
+    resuelve: str  # descripcion del documento
     normas_relacionadas: str = ""
     download_url: str = field(init=False)
 
@@ -92,7 +92,9 @@ def _parse_page(html: str) -> list[DocumentMeta]:
                 fecha=cells[1].get_text(strip=True),
                 vigencia=cells[2].get_text(strip=True),
                 resuelve=cells[4].get_text(strip=True),
-                normas_relacionadas=cells[5].get_text(strip=True) if len(cells) > 5 else "",
+                normas_relacionadas=cells[5].get_text(strip=True)
+                if len(cells) > 5
+                else "",
             )
         )
 
@@ -161,5 +163,7 @@ def download_pdf(codigo: str) -> bytes:
         response = client.get(download_url)
         response.raise_for_status()
 
-    logger.info("Downloaded PDF for codigo %s (%d bytes).", codigo, len(response.content))
+    logger.info(
+        "Downloaded PDF for codigo %s (%d bytes).", codigo, len(response.content)
+    )
     return response.content

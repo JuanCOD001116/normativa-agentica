@@ -8,7 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class MessageBase(BaseModel):
     role: str = Field(..., description="Rol del emisor: user, assistant, system, tool")
     content: str = Field(..., description="Contenido textual del mensaje")
-    meta_data: Optional[Dict[str, Any]] = Field(None, description="Metadatos adicionales del mensaje")
+    meta_data: Optional[Dict[str, Any]] = Field(
+        None, description="Metadatos adicionales del mensaje"
+    )
 
 
 class MessageCreate(MessageBase):
@@ -25,8 +27,12 @@ class MessageResponse(MessageBase):
 
 # --- ESQUEMAS DE CONVERSACIONES ---
 class ConversationBase(BaseModel):
-    title: Optional[str] = Field("Nueva conversación", description="Título descriptivo del chat")
-    meta_data: Optional[Dict[str, Any]] = Field(None, description="Configuraciones o datos adicionales del chat")
+    title: Optional[str] = Field(
+        "Nueva conversación", description="Título descriptivo del chat"
+    )
+    meta_data: Optional[Dict[str, Any]] = Field(
+        None, description="Configuraciones o datos adicionales del chat"
+    )
 
 
 class ConversationCreate(ConversationBase):
@@ -50,4 +56,6 @@ class ConversationDetailResponse(ConversationResponse):
 
 class ConversationUpdate(BaseModel):
     title: Optional[str] = Field(None, description="Nuevo título de la conversación")
-    meta_data: Optional[Dict[str, Any]] = Field(None, description="Nuevos metadatos de la conversación")
+    meta_data: Optional[Dict[str, Any]] = Field(
+        None, description="Nuevos metadatos de la conversación"
+    )

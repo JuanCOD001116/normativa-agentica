@@ -17,6 +17,7 @@ def _load_prompt(name: str) -> str:
 
 def _get_llm() -> Any:
     from app.core.llm import get_llm
+
     return get_llm()
 
 
