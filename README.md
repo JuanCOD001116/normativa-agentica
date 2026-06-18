@@ -35,6 +35,16 @@ flowchart TD
 - Patron supervisor.
 - Agentes como tools.
 
+## Componentes Implementados
+
+### Orquestador
+Componente central que enruta consultas hacia el agente especializado correcto.
+- ✅ Routing por keywords + LLM fallback
+- ✅ Mocks para testing
+- ✅ Entry points inyectables para componentes reales
+
+**Documentación completa:** [docs/orchestrator-implementation.md](docs/orchestrator-implementation.md)
+
 ## Stack recomendado para desarrollo y produccion
 
 ### Objetivo del entorno
