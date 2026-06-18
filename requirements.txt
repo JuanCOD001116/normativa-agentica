@@ -28,6 +28,15 @@ psycopg2-binary>=2.9.0
 # Vector search and memory
 chromadb>=0.3.0
 faiss-cpu>=1.7.0
+pgvector>=0.2.0
+supabase>=2.0.0
+
+# RAG
+langchain-cohere>=0.1.0
+pypdf>=3.17.0
+
+# LLM
+langchain-ollama>=1.1.0
 
 # Utilities
 httpx>=0.25.0
