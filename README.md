@@ -45,6 +45,19 @@ Componente central que enruta consultas hacia el agente especializado correcto.
 
 **Documentación completa:** [docs/orchestrator-implementation.md](docs/orchestrator-implementation.md)
 
+### Frontend Gradio
+Interfaz de usuario avanzada con chat multi-turn y opciones de debugging.
+- ✅ Chat con historial
+- ✅ Selector de agente (forzar o automático)
+- ✅ Panel de debug con metadata
+- ✅ Integración directa con orquestador
+
+**Cómo usar:**
+```bash
+python -m app.ui.gradio_app
+# Abre http://localhost:7860
+```
+
 ## Stack recomendado para desarrollo y produccion
 
 ### Objetivo del entorno

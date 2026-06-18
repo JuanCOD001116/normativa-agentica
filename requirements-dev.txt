@@ -11,5 +11,8 @@ ruff>=0.1.0
 mypy>=1.0.0
 ipython>=8.0.0
 
+# UI and visualization
+gradio>=4.0.0
+
 # Optional utilities for development
 typer>=0.9.0
