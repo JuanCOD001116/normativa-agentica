@@ -138,12 +138,25 @@ function App() {
 
     const userText = inputValue;
     setInputValue("");
-    setIsTyping(true);
+
+    // Mensaje temporal optimista para renderizar instantáneamente en el chat
+    const tempUserMsg = {
+      id: `temp-${Date.now()}`,
+      role: "user",
+      content: userText,
+      created_at: new Date().toISOString(),
+    };
+
+    // Mostrar el mensaje del usuario inmediatamente en la pantalla
+    setMessages((prev) => [...prev, tempUserMsg]);
 
     try {
       // 1. Guardar mensaje del usuario en la base de datos
       const userMsg = await api.sendMessage(activeConversation.id, "user", userText);
       
+      // Reemplazar el mensaje temporal por el real (con su ID definitivo de base de datos)
+      setMessages((prev) => prev.map((msg) => (msg.id === tempUserMsg.id ? userMsg : msg)));
+
       // Si es el primer mensaje de la conversación, actualizar el título dinámicamente
       if (messages.length === 0) {
         const truncatedTitle = userText.length > 26 ? userText.substring(0, 26) + "..." : userText;
@@ -158,7 +171,8 @@ function App() {
         }
       }
 
-      setMessages((prev) => [...prev, userMsg]);
+      // Activar indicador de que el bot está escribiendo
+      setIsTyping(true);
 
       // 2. Llamar al backend para invocar el agente de LangGraph
       try {
@@ -172,6 +186,8 @@ function App() {
       }
     } catch (err) {
       console.error("Error al enviar mensaje:", err);
+      // Eliminar el mensaje temporal si falla la persistencia
+      setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMsg.id));
       setIsTyping(false);
     }
   };
