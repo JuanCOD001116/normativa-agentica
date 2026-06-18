@@ -9,13 +9,14 @@ from typing import Any, Callable
 import yaml
 
 AGENT_REGLAMENTO_ESTUDIANTES = "reglamento_estudiantes"
-AGENT_WEB = "web"
+AGENT_PROFESORES = "profesores"
 
 # Aliases de compatibilidad para imports existentes.
 AGENT_DOCUMENTS = AGENT_REGLAMENTO_ESTUDIANTES
-AGENT_SCRAPING = AGENT_WEB
+AGENT_WEB = AGENT_PROFESORES
+AGENT_SCRAPING = AGENT_PROFESORES
 
-VALID_AGENTS = {AGENT_REGLAMENTO_ESTUDIANTES, AGENT_WEB}
+VALID_AGENTS = {AGENT_REGLAMENTO_ESTUDIANTES, AGENT_PROFESORES}
 FALLBACK_ROUTING_REASON = (
     "Fallback to student regulations agent after invalid orchestrator LLM output"
 )
@@ -27,6 +28,67 @@ def get_llm() -> Any:
     from app.core.llm import get_llm as core_get_llm
 
     return core_get_llm()
+
+
+def _handle_smalltalk(query: str) -> dict[str, Any] | None:
+    """Detecta saludos y mensajes conversacionales y responde directamente.
+
+    Retorna un resultado listo si es small talk, None si es una pregunta de normativa.
+    """
+    llm = get_llm()
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Classify the following message as either 'smalltalk' or 'normativa'.\n"
+                "'smalltalk': ONLY pure greetings (hola, hi, buenos días), farewells (adiós, chao), "
+                "or single-word thanks (gracias). Nothing else.\n"
+                "'normativa': everything else — questions, requests, opinions, topics about the university, "
+                "regulations, or anything that requires a substantive answer.\n"
+                "When in doubt, classify as normativa.\n"
+                "Reply with only one word: smalltalk or normativa."
+            ),
+        },
+        {"role": "user", "content": query},
+    ]
+    try:
+        result = llm.invoke(messages)
+        classification = getattr(result, "content", "").strip().lower()
+    except Exception:
+        classification = "normativa"
+
+    if "smalltalk" not in classification:
+        return None
+
+    greeting_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a university regulation assistant for Universidad de Antioquia. "
+                "The user just sent a greeting or farewell. Respond briefly and warmly. "
+                "Do NOT answer any questions or give opinions. "
+                "Just greet back and mention you are here to help with university regulations. "
+                "Respond in the same language as the user. Maximum 2 sentences."
+            ),
+        },
+        {"role": "user", "content": query},
+    ]
+    try:
+        greeting_result = llm.invoke(greeting_messages)
+        response = getattr(greeting_result, "content", "¡Hola! ¿En qué te puedo ayudar con la normativa universitaria?").strip()
+    except Exception:
+        response = "¡Hola! ¿En qué te puedo ayudar con la normativa universitaria?"
+
+    return {
+        "agents": ["smalltalk"],
+        "query": query,
+        "routing_reason": "Conversational message detected",
+        "response_language": "same language as the user input",
+        "response": response,
+        "agent_details": {},
+        "validation": {"valid": True, "reason": "Smalltalk — no normativa validation needed"},
+        "attempts": 1,
+    }
 
 
 def rag_ask(query: str) -> dict[str, Any]:
@@ -107,13 +169,17 @@ def agent_reglamento_estudiantes(query: str) -> dict[str, Any]:
     }
 
 
-def mock_agent_scraping(query: str) -> dict[str, Any]:
-    """Mock temporal del agente web."""
+def agent_profesores(query: str) -> dict[str, Any]:
+    """Agente especializado en el Estatuto del Profesor de Cátedra y Ocasional."""
+    from app.agents.rag_agent_professors import ask
+
+    rag_result = ask(query)
     return {
-        "response": f"[MOCK WEB] Respuesta del agente web para: '{query}'",
-        "url": "https://normativa.udea.edu.co/consulta",
-        "date_fetched": "2026-06-17",
-        "agent": AGENT_WEB,
+        "response": rag_result.get("respuesta", ""),
+        "sources": rag_result.get("fuentes", []),
+        "query_reescrita": rag_result.get("query_reescrita"),
+        "agent": AGENT_PROFESORES,
+        "raw": rag_result,
     }
 
 
@@ -187,16 +253,44 @@ def _build_orchestration_result(
     }
 
 
+_MAX_VALIDATION_RETRIES = 2
+_FALLBACK_RESPONSE = (
+    "Lo siento, no encontré información suficiente en la normativa disponible para responder "
+    "tu pregunta. Te recomendamos consultar directamente con la Secretaría General de la "
+    "Universidad de Antioquia o visitar normativa.udea.edu.co."
+)
+
+
 def orchestrate(query: str) -> dict[str, Any]:
-    """Orquesta la consulta usando RAG real para reglamento estudiantes y web mock."""
-    routing_info = route_query(query)
-    agent_details = _run_selected_agents(
-        query=query,
-        agents=routing_info["agents"],
-        agent_reglamento_fn=agent_reglamento_estudiantes,
-        agent_web_fn=mock_agent_scraping,
-    )
-    return _build_orchestration_result(query, routing_info, agent_details)
+    """Orquesta la consulta con validación al final del flujo (máx. 2 reintentos)."""
+    from app.agents.validator_agent import validate
+
+    smalltalk = _handle_smalltalk(query)
+    if smalltalk is not None:
+        return smalltalk
+
+    last_result: dict[str, Any] = {}
+
+    for attempt in range(1, _MAX_VALIDATION_RETRIES + 1):
+        routing_info = route_query(query)
+        agent_details = _run_selected_agents(
+            query=query,
+            agents=routing_info["agents"],
+            agent_reglamento_fn=agent_reglamento_estudiantes,
+            agent_web_fn=agent_profesores,
+        )
+        result = _build_orchestration_result(query, routing_info, agent_details)
+
+        validation = validate(query, result["response"])
+        result["validation"] = validation
+        result["attempts"] = attempt
+        last_result = result
+
+        if validation["valid"]:
+            return result
+
+    last_result["response"] = _FALLBACK_RESPONSE
+    return last_result
 
 
 def orchestrate_with_components(
