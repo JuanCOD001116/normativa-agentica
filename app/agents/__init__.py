@@ -6,7 +6,10 @@ Expone las funciones principales para enrutar y ejecutar agentes.
 
 from .orchestrator import (
     AGENT_DOCUMENTS,
+    AGENT_REGLAMENTO_ESTUDIANTES,
     AGENT_SCRAPING,
+    AGENT_WEB,
+    agent_reglamento_estudiantes,
     orchestrate,
     orchestrate_with_components,
     route_query,
@@ -14,7 +17,10 @@ from .orchestrator import (
 
 __all__ = [
     "AGENT_DOCUMENTS",
+    "AGENT_REGLAMENTO_ESTUDIANTES",
     "AGENT_SCRAPING",
+    "AGENT_WEB",
+    "agent_reglamento_estudiantes",
     "orchestrate",
     "orchestrate_with_components",
     "route_query",
