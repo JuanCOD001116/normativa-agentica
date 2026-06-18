@@ -1,14 +1,23 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app.api.main import app
 from app.core.database import Base, get_db
 
 # Configuración de base de datos de prueba en memoria
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -117,3 +126,52 @@ def test_delete_conversation():
     # 3. Comprobar que ya no existe
     response = client.get(f"/api/conversations/{conversation_id}")
     assert response.status_code == 404
+
+
+def test_ask_agent_uses_orchestrator_result_and_stores_assistant_message(monkeypatch):
+    response = client.post(
+        "/api/conversations/",
+        json={"user_id": "test_user_123", "title": "Test Chat"},
+    )
+    conversation_id = response.json()["id"]
+
+    response = client.post(
+        f"/api/conversations/{conversation_id}/messages",
+        json={"role": "user", "content": "Que dice el reglamento?"},
+    )
+    assert response.status_code == 201
+
+    def fake_agent_result(conversation_id, db):
+        return {
+            "agents": ["reglamento_estudiantes"],
+            "routing_reason": "Test routing",
+            "response_language": "Spanish",
+            "response": "Respuesta desde el orquestador",
+            "agent_details": {
+                "reglamento_estudiantes": {
+                    "response": "Respuesta desde el orquestador",
+                    "sources": [],
+                }
+            },
+        }
+
+    monkeypatch.setattr(
+        "app.api.routes.conversations.AgentService.get_agent_result",
+        fake_agent_result,
+    )
+
+    response = client.post(f"/api/conversations/{conversation_id}/ask")
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["role"] == "assistant"
+    assert data["content"] == "Respuesta desde el orquestador"
+    assert data["meta_data"]["agents"] == ["reglamento_estudiantes"]
+    assert data["meta_data"]["routing_reason"] == "Test routing"
+
+    response = client.get(f"/api/conversations/{conversation_id}")
+    assert response.status_code == 200
+    messages = response.json()["messages"]
+    assert len(messages) == 2
+    assert messages[0]["role"] == "user"
+    assert messages[1]["role"] == "assistant"

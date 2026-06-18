@@ -1,289 +1,226 @@
-"""
-Orquestador principal del sistema de normativa.
+"""Orquestador principal del sistema de normativa."""
 
-Responsable de enrutar consultas hacia el agente apropiado:
-- Agente de documentos (AG_DOC): para consultas sobre reglamento interno
-- Agente de scraping (AG_SCRAPE): para consultas de normativa web en vivo
+from __future__ import annotations
 
-Este módulo define interfaces claras para que otros componentes se conecten cuando estén listos.
-"""
+import json
+from pathlib import Path
+from typing import Any, Callable
 
-from typing import Any, Callable, Dict, Optional
+import yaml
 
-# Constantes para tipos de agente
-AGENT_DOCUMENTS = "doc"
-AGENT_SCRAPING = "web"
+AGENT_REGLAMENTO_ESTUDIANTES = "reglamento_estudiantes"
+AGENT_WEB = "web"
 
-# Palabras clave para detectar tipo de consulta
-KEYWORDS_DOC = {
-    "reglamento",
-    "documento",
-    "interno",
-    "política",
-    "procedimiento",
-    "normativo",
-    "manual",
-    "guía",
-}
-KEYWORDS_WEB = {
-    "web",
-    "normativa",
-    "vivo",
-    "actual",
-    "consulta",
-    "en línea",
-    "online",
-    "corriente",
-}
+# Aliases de compatibilidad para imports existentes.
+AGENT_DOCUMENTS = AGENT_REGLAMENTO_ESTUDIANTES
+AGENT_SCRAPING = AGENT_WEB
+
+VALID_AGENTS = {AGENT_REGLAMENTO_ESTUDIANTES, AGENT_WEB}
+FALLBACK_ROUTING_REASON = (
+    "Fallback to student regulations agent after invalid orchestrator LLM output"
+)
+
+_PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 
 
-def detect_agent_by_keywords(query: str) -> Optional[str]:
-    """
-    Detecta el tipo de agente necesario basado en palabras clave.
+def get_llm() -> Any:
+    from app.core.llm import get_llm as core_get_llm
 
-    Args:
-        query: Pregunta del usuario
-
-    Returns:
-        AGENT_DOCUMENTS ("doc") para Agente de Documentos
-        AGENT_SCRAPING ("web") para Agente de Scraping
-        None si es ambiguo o no hay matches claros
-    """
-    query_lower = query.lower()
-
-    doc_matches = sum(1 for kw in KEYWORDS_DOC if kw in query_lower)
-    web_matches = sum(1 for kw in KEYWORDS_WEB if kw in query_lower)
-
-    if doc_matches > web_matches:
-        return AGENT_DOCUMENTS
-    elif web_matches > doc_matches:
-        return AGENT_SCRAPING
-
-    # Si hay igualdad o no hay matches claros, retorna None para que use LLM fallback
-    return None
+    return core_get_llm()
 
 
-def detect_agent_by_llm(query: str) -> str:
-    """
-    Usa un LLM ligero para decidir el tipo de agente cuando keywords no es concluyente.
+def rag_ask(query: str) -> dict[str, Any]:
+    from app.agents.rag_agent import ask
 
-    Por ahora: lógica simple basada en heurística.
-    TODO: Integrar LLM real aquí para mejor precision.
-
-    Args:
-        query: Pregunta del usuario
-
-    Returns:
-        AGENT_DOCUMENTS ("doc") o AGENT_SCRAPING ("web")
-    """
-    # Heurística: preguntas interrogativas amplias tienden a necesitar búsqueda en vivo
-    interrogatives = ["cuál", "cuáles", "dónde", "cuándo", "cómo", "por qué", "quién"]
-    if any(word in query.lower() for word in interrogatives):
-        return AGENT_SCRAPING
-
-    # Default a documento (consulta interna)
-    return AGENT_DOCUMENTS
+    return ask(query)
 
 
-def route_query(query: str) -> Dict[str, Any]:
-    """
-    Enruta la consulta al agente apropiado usando keywords + LLM fallback.
-
-    Args:
-        query: Pregunta del usuario
-
-    Returns:
-        Dict con 'agent' (tipo de agente) y 'reason' (explicación del routing)
-    """
-    agent = detect_agent_by_keywords(query)
-    reason = ""
-
-    if agent is None:
-        agent = detect_agent_by_llm(query)
-        reason = "Routing por análisis de pregunta (keywords ambiguo)"
-    else:
-        if agent == AGENT_DOCUMENTS:
-            reason = "Detectada palabra clave de documento interno"
-        else:
-            reason = "Detectada palabra clave de normativa web"
-
-    return {"agent": agent, "reason": reason}
+def _load_prompt(name: str, key: str = "system_prompt") -> str:
+    with open(_PROMPTS_DIR / f"{name}.yaml", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data[key]
 
 
-# ============================================================================
-# MOCKS PARA AGENTES (reemplazar cuando componentes reales estén listos)
-# ============================================================================
+def _message_content(response: Any) -> str:
+    return getattr(response, "content", str(response)).strip()
 
 
-def mock_agent_documents(query: str) -> Dict[str, Any]:
-    """
-    Mock del Agente de Documentos.
-
-    Retorna una respuesta quemada simulando RAG sobre reglamento interno.
-    TODO: Reemplazar por implementación real cuando AG_DOC esté listo.
-
-    Args:
-        query: Pregunta del usuario
-
-    Returns:
-        Dict con structure: {'response': str, 'sources': list, 'confidence': float}
-    """
+def _fallback_route() -> dict[str, Any]:
     return {
-        "response": f"[MOCK AG_DOC] Respuesta del Agente de Documentos para: '{query}'",
-        "sources": ["reglamento_interno.pdf", "manual_procedimientos.pdf"],
-        "confidence": 0.85,
-        "agent": AGENT_DOCUMENTS,
+        "agents": [AGENT_REGLAMENTO_ESTUDIANTES],
+        "reason": FALLBACK_ROUTING_REASON,
+        "response_language": "same language as the user input",
     }
 
 
-def mock_agent_scraping(query: str) -> Dict[str, Any]:
-    """
-    Mock del Agente de Scraping.
+def _parse_route_response(content: str) -> dict[str, Any]:
+    data = json.loads(content)
+    agents = data.get("agents")
 
-    Retorna una respuesta quemada simulando búsqueda en normativa.udea.edu.co
-    TODO: Reemplazar por implementación real cuando AG_SCRAPE esté listo.
+    if not isinstance(agents, list) or not agents:
+        raise ValueError("Expected non-empty agents list")
 
-    Args:
-        query: Pregunta del usuario
+    normalized_agents: list[str] = []
+    for agent in agents:
+        if agent not in VALID_AGENTS:
+            raise ValueError(f"Unknown agent: {agent}")
+        if agent not in normalized_agents:
+            normalized_agents.append(agent)
 
-    Returns:
-        Dict con structure: {'response': str, 'url': str, 'date_fetched': str}
-    """
+    reason = data.get("reason")
+    response_language = data.get("response_language")
+
     return {
-        "response": f"[MOCK AG_SCRAPE] Respuesta del Agente de Scraping para: '{query}'",
+        "agents": normalized_agents,
+        "reason": reason if isinstance(reason, str) and reason else "LLM routing",
+        "response_language": (
+            response_language
+            if isinstance(response_language, str) and response_language
+            else "same language as the user input"
+        ),
+    }
+
+
+def route_query(query: str) -> dict[str, Any]:
+    """Enruta la consulta usando siempre el LLM del orquestador."""
+    try:
+        llm = get_llm()
+        messages = [
+            {"role": "system", "content": _load_prompt("orchestrator")},
+            {"role": "user", "content": query},
+        ]
+        response = llm.invoke(messages)
+        return _parse_route_response(_message_content(response))
+    except Exception:
+        return _fallback_route()
+
+
+def agent_reglamento_estudiantes(query: str) -> dict[str, Any]:
+    """Tool del agente RAG de reglamento estudiantes."""
+    rag_result = rag_ask(query)
+    return {
+        "response": rag_result.get("respuesta", ""),
+        "sources": rag_result.get("fuentes", []),
+        "query_reescrita": rag_result.get("query_reescrita"),
+        "agent": AGENT_REGLAMENTO_ESTUDIANTES,
+        "raw": rag_result,
+    }
+
+
+def mock_agent_scraping(query: str) -> dict[str, Any]:
+    """Mock temporal del agente web."""
+    return {
+        "response": f"[MOCK WEB] Respuesta del agente web para: '{query}'",
         "url": "https://normativa.udea.edu.co/consulta",
         "date_fetched": "2026-06-17",
-        "agent": AGENT_SCRAPING,
+        "agent": AGENT_WEB,
     }
 
 
-# ============================================================================
-# ENTRY POINTS DEL ORQUESTADOR
-# ============================================================================
+def _synthesize_response(
+    query: str,
+    routing_info: dict[str, Any],
+    agent_details: dict[str, dict[str, Any]],
+) -> str:
+    llm = get_llm()
+    agent_outputs = json.dumps(agent_details, ensure_ascii=False, indent=2)
+    messages = [
+        {"role": "system", "content": _load_prompt("orchestrator", "synthesis_prompt")},
+        {
+            "role": "user",
+            "content": (
+                f"Original user question:\n{query}\n\n"
+                f"Routing decision:\n{json.dumps(routing_info, ensure_ascii=False)}\n\n"
+                f"Agent outputs:\n{agent_outputs}"
+            ),
+        },
+    ]
+    response = llm.invoke(messages)
+    return _message_content(response)
 
 
-def orchestrate(query: str) -> Dict[str, Any]:
-    """
-    Orquestador principal con mocks.
+def _fallback_combined_response(agent_details: dict[str, dict[str, Any]]) -> str:
+    return "\n\n".join(
+        detail.get("response", "")
+        for detail in agent_details.values()
+        if detail.get("response")
+    )
 
-    Versión actual que usa mocks de agentes. Útil para testing y desarrollo.
 
-    Args:
-        query: Pregunta del usuario
+def _run_selected_agents(
+    query: str,
+    agents: list[str],
+    agent_reglamento_fn: Callable[[str], dict[str, Any]],
+    agent_web_fn: Callable[[str], dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    agent_details: dict[str, dict[str, Any]] = {}
 
-    Returns:
-        Dict con resultado completo del orquestador
-    """
-    print(f"\n[ORCHESTRATOR] Recibida pregunta: '{query}'")
+    for agent in agents:
+        if agent == AGENT_REGLAMENTO_ESTUDIANTES:
+            agent_details[agent] = agent_reglamento_fn(query)
+        elif agent == AGENT_WEB:
+            agent_details[agent] = agent_web_fn(query)
 
-    # 1. Routing
-    routing_info = route_query(query)
-    agent = routing_info["agent"]
-    reason = routing_info["reason"]
+    return agent_details
 
-    print(f"[ORCHESTRATOR] Routing: {agent} ({reason})")
 
-    # 2. Invocar agente (mock)
-    if agent == AGENT_DOCUMENTS:
-        agent_response = mock_agent_documents(query)
+def _build_orchestration_result(
+    query: str,
+    routing_info: dict[str, Any],
+    agent_details: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    if len(agent_details) == 1:
+        response = next(iter(agent_details.values())).get("response", "")
     else:
-        agent_response = mock_agent_scraping(query)
+        try:
+            response = _synthesize_response(query, routing_info, agent_details)
+        except Exception:
+            response = _fallback_combined_response(agent_details)
 
-    print(f"[ORCHESTRATOR] Respuesta del agente: {agent_response['response']}")
-
-    # 3. Retornar resultado
-    result = {
-        "agent": agent,
+    return {
+        "agents": routing_info["agents"],
         "query": query,
-        "routing_reason": reason,
-        "response": agent_response["response"],
-        "agent_details": agent_response,
+        "routing_reason": routing_info["reason"],
+        "response_language": routing_info["response_language"],
+        "response": response,
+        "agent_details": agent_details,
     }
 
-    return result
+
+def orchestrate(query: str) -> dict[str, Any]:
+    """Orquesta la consulta usando RAG real para reglamento estudiantes y web mock."""
+    routing_info = route_query(query)
+    agent_details = _run_selected_agents(
+        query=query,
+        agents=routing_info["agents"],
+        agent_reglamento_fn=agent_reglamento_estudiantes,
+        agent_web_fn=mock_agent_scraping,
+    )
+    return _build_orchestration_result(query, routing_info, agent_details)
 
 
 def orchestrate_with_components(
     query: str,
-    agent_doc_fn: Callable[[str], Dict[str, Any]],
-    agent_web_fn: Callable[[str], Dict[str, Any]],
-) -> Dict[str, Any]:
-    """
-    Orquestador con componentes inyectables.
-
-    Versión para cuando los agentes reales estén listos.
-    Permite inyectar funciones de agentes documentos y scraping.
-
-    Args:
-        query: Pregunta del usuario
-        agent_doc_fn: Función que implementa AG_DOC. Firma: (query: str) -> Dict
-        agent_web_fn: Función que implementa AG_SCRAPE. Firma: (query: str) -> Dict
-
-    Returns:
-        Dict con resultado completo del orquestador
-    """
-    print(f"\n[ORCHESTRATOR] Recibida pregunta: '{query}'")
-
-    # 1. Routing
+    agent_doc_fn: Callable[[str], dict[str, Any]],
+    agent_web_fn: Callable[[str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Orquesta con componentes inyectables para pruebas o integraciones."""
     routing_info = route_query(query)
-    agent = routing_info["agent"]
-    reason = routing_info["reason"]
-
-    print(f"[ORCHESTRATOR] Routing: {agent} ({reason})")
-
-    # 2. Invocar agente (componente real inyectado)
-    if agent == AGENT_DOCUMENTS:
-        agent_response = agent_doc_fn(query)
-    else:
-        agent_response = agent_web_fn(query)
-
-    print(f"[ORCHESTRATOR] Respuesta del agente: {agent_response.get('response', 'N/A')}")
-
-    # 3. Retornar resultado
-    result = {
-        "agent": agent,
-        "query": query,
-        "routing_reason": reason,
-        "response": agent_response.get("response", ""),
-        "agent_details": agent_response,
-    }
-
-    return result
-
-
-# ============================================================================
-# TESTS
-# ============================================================================
+    agent_details = _run_selected_agents(
+        query=query,
+        agents=routing_info["agents"],
+        agent_reglamento_fn=agent_doc_fn,
+        agent_web_fn=agent_web_fn,
+    )
+    return _build_orchestration_result(query, routing_info, agent_details)
 
 
 if __name__ == "__main__":
-    print("=" * 80)
-    print("TESTS DEL ORQUESTADOR - SISTEMA DE NORMATIVA")
-    print("=" * 80)
-
-    # Casos de prueba
     test_queries = [
-        "¿Cuál es el reglamento interno sobre permisos?",
-        "¿Dónde puedo encontrar la normativa actual en web?",
-        "¿Cómo funciona el procedimiento de solicitud de vacaciones?",
-        "¿Qué normativa hay vigente?",
+        "Cual es el reglamento sobre permanencia estudiantil?",
+        "Consulta normativa vigente en la web y comparala con el reglamento.",
     ]
 
-    print("\n--- Prueba 1: Orquestador con Mocks ---\n")
-    for i, query in enumerate(test_queries, 1):
-        result = orchestrate(query)
-        print(f"\nResultado {i}:")
-        print(f"  Agent: {result['agent']}")
-        print(f"  Razón routing: {result['routing_reason']}")
-        print(f"  Respuesta: {result['response']}")
-        print("-" * 80)
-
-    print("\n--- Prueba 2: Routing sin agentes ---\n")
-    for query in test_queries:
-        routing = route_query(query)
-        print(f"Q: {query}")
-        print(f"   → Agent: {routing['agent']} | Razón: {routing['reason']}\n")
-
-    print("\n" + "=" * 80)
-    print("TESTS COMPLETADOS")
-    print("=" * 80)
+    for test_query in test_queries:
+        result = orchestrate(test_query)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
