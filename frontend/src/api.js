@@ -94,4 +94,15 @@ export const api = {
     }
     return response.json();
   },
+
+  // Preguntar al agente (invocar LangGraph en el backend)
+  async askAgent(conversationId) {
+    const response = await fetch(`${BASE_URL}/conversations/${conversationId}/ask`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      throw new Error("Error al obtener la respuesta del agente");
+    }
+    return response.json();
+  },
 };

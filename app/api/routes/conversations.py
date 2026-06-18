@@ -13,6 +13,7 @@ from app.core.schemas import (
     MessageResponse,
 )
 from app.core.services import ConversationService
+from app.core.agent import AgentService
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
@@ -114,3 +115,28 @@ def update_conversation(
             detail="Conversación no encontrada",
         )
     return db_conversation
+
+
+@router.post("/{conversation_id}/ask", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def ask_agent(conversation_id: uuid.UUID, db: Session = Depends(get_db)):
+    """
+    Invoca al agente de LangGraph para responder la última consulta del usuario,
+    guardando su respuesta en la base de datos de forma persistente.
+    """
+    try:
+        # 1. Obtener la respuesta procesada por el flujo del agente (LangGraph)
+        agent_reply = AgentService.get_agent_response(conversation_id, db)
+        
+        # 2. Persistir el mensaje generado por el asistente en base de datos
+        db_message = ConversationService.add_message(
+            db=db,
+            conversation_id=conversation_id,
+            role="assistant",
+            content=agent_reply,
+        )
+        return db_message
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al procesar la respuesta del agente: {str(e)}"
+        )

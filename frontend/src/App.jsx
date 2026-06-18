@@ -160,28 +160,16 @@ function App() {
 
       setMessages((prev) => [...prev, userMsg]);
 
-      // 2. Simular respuesta automatizada del bot de la UdeA
-      setTimeout(async () => {
-        try {
-          const botReplyText = `¡Hola! He recibido tu consulta: "${userText}".
-
-Como tu Asistente de Normativa de la Universidad de Antioquia (UdeA), estoy preparado para guiarte en reglamentos estudiantiles, estatutos y procesos académicos de nuestra Alma Máter.
-
-*(Esta es una respuesta simulada y guardada exitosamente en tu base de datos).*`;
-
-          const botMsg = await api.sendMessage(
-            activeConversation.id,
-            "assistant",
-            botReplyText
-          );
-          setMessages((prev) => [...prev, botMsg]);
-          setIsTyping(false);
-          loadConversations(); // Recargar para actualizar la fecha de modificación del chat
-        } catch (err) {
-          console.error("Error al obtener respuesta del bot:", err);
-          setIsTyping(false);
-        }
-      }, 1200);
+      // 2. Llamar al backend para invocar el agente de LangGraph
+      try {
+        const botMsg = await api.askAgent(activeConversation.id);
+        setMessages((prev) => [...prev, botMsg]);
+        loadConversations(); // Recargar para actualizar fecha de modificación
+      } catch (err) {
+        console.error("Error al obtener respuesta del agente:", err);
+      } finally {
+        setIsTyping(false);
+      }
     } catch (err) {
       console.error("Error al enviar mensaje:", err);
       setIsTyping(false);
